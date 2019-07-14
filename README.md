@@ -6,8 +6,6 @@ and offers (BBOs) and latest trades in [Parity Trading System][].
 
   [Parity Trading System]: https://github.com/paritytrading/parity
 
-![Screenshot](screenshot.png)
-
 Application implements REST Api for order management
 
 
