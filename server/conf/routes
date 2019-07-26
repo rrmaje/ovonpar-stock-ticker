@@ -1,0 +1,5 @@
+GET    /data            controllers.Application.data
+POST   /v1/orders/new   controllers.Application.newOrder
+GET   /v1/orders/   controllers.Application.orders
+GET    /                controllers.Assets.at(path = "/public", file = "index.html")
+GET    /*file           controllers.Assets.at(path = "/public", file)
