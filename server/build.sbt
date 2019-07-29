@@ -21,4 +21,5 @@ libraryDependencies ++= Seq(
 libraryDependencies += guice
 
 dockerBaseImage := "openjdk:jre"
+dockerUsername := Some("rrmaje")
 lazy val root = (project in file(".")).enablePlugins(PlayScala)
