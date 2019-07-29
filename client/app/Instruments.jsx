@@ -29,7 +29,7 @@ export default class Instruments extends React.Component {
   
 
   componentDidMount() {
-    var socket = new WebSocket("ws://" + location.host + "/data");
+    var socket = new WebSocket("wss://" + location.host + "/data");
 
     socket.onmessage = function (event) {
       var message = JSON.parse(event.data);
