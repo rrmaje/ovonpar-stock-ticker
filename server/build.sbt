@@ -8,8 +8,6 @@ val parityVersion = "0.7.1-SNAPSHOT"
 val nassauVersion = "0.13.0"
 
 resolvers += "Local Maven Repository" at "file://"+Path.userHome.absolutePath+"/.m2/repository"
-resolvers += "jitpack" at "https://jitpack.io"
-resolvers += "consensys" at "https://consensys.bintray.com/consensys"
 
 libraryDependencies ++= Seq(
   "com.paritytrading.foundation" % "foundation"    % "0.2.1",
