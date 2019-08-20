@@ -8,6 +8,8 @@ val parityVersion = "0.7.1-SNAPSHOT"
 val nassauVersion = "0.13.0"
 
 resolvers += "Local Maven Repository" at "file://"+Path.userHome.absolutePath+"/.m2/repository"
+resolvers += "jitpack" at "https://jitpack.io"
+resolvers += "consensys" at "https://consensys.bintray.com/consensys"
 
 libraryDependencies ++= Seq(
   "com.paritytrading.foundation" % "foundation"    % "0.2.1",
@@ -15,10 +17,14 @@ libraryDependencies ++= Seq(
   "com.paritytrading.parity"     % "parity-book"   % parityVersion,
   "com.paritytrading.parity"     % "parity-util"   % parityVersion,
   "com.paritytrading.nassau"     % "nassau-util"   % nassauVersion,
-  "org.jvirtanen.config"         % "config-extras" % "0.1.0"
+  "org.jvirtanen.config"         % "config-extras" % "0.1.0",
+"io.seruco.encoding" % "base62" % "0.1.2",
+"org.bouncycastle" % "bcprov-jdk15on" % "1.60"
+
 )
 
 libraryDependencies += guice
 
 dockerBaseImage := "openjdk:jre"
+dockerUsername := Some("rrmaje")
 lazy val root = (project in file(".")).enablePlugins(PlayScala)

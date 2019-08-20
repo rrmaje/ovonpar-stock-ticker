@@ -9,20 +9,27 @@ import akka.actor.Props
 import play.api.libs.json.JsValue
 import play.api.libs.streams.ActorFlow
 import akka.stream.Materializer
-import actors.OrderEntryApi
+import actors.oe.OrderEntryApi
 import com.paritytrading.parity.net.poe.POE
-import actors.OrderEntryApi.ConnectToOrderEntry
-import actors.OrderEntryApi.EnterOrder
+import actors.oe.OrderEntryApi.ConnectToOrderEntry
+import actors.oe.OrderEntryApi.EnterOrder
 import akka.actor.ActorRef
 import scala.concurrent.ExecutionContextExecutor
-import actors.OrderEntryApi.OrderEntered
+import actors.oe.OrderEntryApi.OrderEntered
 import play.api.libs.json.JsError
 import play.api.libs.json.Json
 import scala.concurrent.Future
-import actors.OrderEntryApi.OrdersRequest
+import actors.oe.OrderEntryApi.OrdersRequest
+import actors.reporter.MarketEventsReceiver
+import actors.reporter.MarketEventsPublisher
+import actors.oe.OrdersApi
+import actors.reporter.MarketDataPublisher
+import actors.reporter.MarketDataReceiver
+import actors.reporter.MarketDataRelay
+import actors.reporter.MarketEventsRelay
 
 @Singleton
-class Application @Inject() (cc: ControllerComponents, configuration: play.api.Configuration)(implicit system: ActorSystem, mat: Materializer) extends AbstractController(cc) with OrdersApi {
+class Application @Inject() (cc: ControllerComponents, configuration: play.api.Configuration, withSession: SessionKey)(implicit system: ActorSystem, mat: Materializer) extends AbstractController(cc) with OrdersApi {
 
   implicit def executionContext: ExecutionContextExecutor = system.dispatcher
 
@@ -31,6 +38,10 @@ class Application @Inject() (cc: ControllerComponents, configuration: play.api.C
   val publisher = system.actorOf(Props[MarketDataPublisher], "market-data-publisher")
 
   new Thread(new MarketDataReceiver(configuration.underlying, publisher)).start
+  
+  val marketEventsPublisher = system.actorOf(Props[MarketEventsPublisher], "market-events-publisher")
+  
+  new Thread(new MarketEventsReceiver(configuration.underlying, marketEventsPublisher)).start
 
   def createOrderEntryApi(): ActorRef = {
     val orderEntry = system.actorOf(OrderEntryApi.props(configuration.underlying), "order-entry")
@@ -39,24 +50,38 @@ class Application @Inject() (cc: ControllerComponents, configuration: play.api.C
   }
 
   def newOrder = Action.async(parse.json) { request =>
-    val newOrderJson = request.body.validate[EnterOrder]
-    newOrderJson.fold(
-      errors => {
-        Future.successful(BadRequest(Json.obj("status" -> "Error", "message" -> JsError.toJson(errors))))
-      },
-      newOrder => {
-        enterOrder(newOrder).map { orderEntered =>
-          Ok(Json.toJson(orderEntered))
-        }
+      val newOrderJson = request.body.validate[EnterOrder]
+      newOrderJson.fold(
+        errors => {
+          Future.successful(BadRequest(Json.obj("status" -> 400, "message" -> JsError.toJson(errors))))
+        },
+        newOrder => {
+          enterOrder(newOrder).map { orderEntered =>
+            Ok(Json.toJson(orderEntered))
+          }
 
-      })
+        })
   }
   
+  def securedOrder = withSession.async(parse.json) { request =>
+      val newOrderJson = request.body.validate[EnterOrder]
+      newOrderJson.fold(
+        errors => {
+          Future.successful(BadRequest(Json.obj("status" -> 400, "message" -> JsError.toJson(errors))))
+        },
+        newOrder => {
+          enterOrder(newOrder).map { orderEntered =>
+            Ok(Json.toJson(orderEntered))
+          }
+
+        })
+  }
+
   def orders = Action.async(parse.json) { request =>
     val ordersJson = request.body.validate[OrdersRequest]
     ordersJson.fold(
       errors => {
-        Future.successful(BadRequest(Json.obj("status" -> "Error", "message" -> JsError.toJson(errors))))
+        Future.successful(BadRequest(Json.obj("status" -> 400, "message" -> JsError.toJson(errors))))
       },
       ordersRequest => {
         getOrders(ordersRequest).map { ordersResponse =>
@@ -71,4 +96,11 @@ class Application @Inject() (cc: ControllerComponents, configuration: play.api.C
       Props(new MarketDataRelay(publisher, out))
     }
   }
+  
+  def trades = WebSocket.accept[JsValue, JsValue] { request =>
+    ActorFlow.actorRef { out =>
+      Props(new MarketEventsRelay(marketEventsPublisher, out))
+    }
+  }
+  
 }

@@ -10,6 +10,21 @@
   padding: 10px 0px 0px 64px;
 }
 
+.footer {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  background-color: #333;
+  color: white;
+  text-align: left;
+  padding: 14px 16px;
+}
+
+.footer a {
+  color: white;
+}
+
 .instruments {
   font-family: arial, sans-serif;
   width: 100%;
@@ -30,6 +45,7 @@ body {
 .topnav {
   overflow: hidden;
   background-color: #333;
+  width: 100%;
 }
 
 .topnav a {

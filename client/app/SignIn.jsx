@@ -1,13 +1,18 @@
 import React from 'react';
-import {Button} from '@material-ui/core';
-import {TextField} from '@material-ui/core';
-import {FormControlLabel} from '@material-ui/core';
-import {Checkbox} from '@material-ui/core';
-import {Grid} from '@material-ui/core';
-import {Typography} from '@material-ui/core';
+import { Button } from '@material-ui/core';
+import { TextField } from '@material-ui/core';
+import { Grid } from '@material-ui/core';
+import { Typography } from '@material-ui/core';
 import { makeStyles } from '@material-ui/core/styles';
-import {Container} from '@material-ui/core';
+import { Container } from '@material-ui/core';
+import { Box } from '@material-ui/core';
 import { Link } from 'react-router-dom';
+
+import { Formik } from 'formik';
+import * as Yup from 'yup';
+
+import { authenticationService } from '@/_services';
+import { history } from '@/_helpers';
 
 const useStyles = makeStyles(theme => ({
   '@global': {
@@ -30,43 +35,99 @@ const useStyles = makeStyles(theme => ({
   },
   notchedOutline: {
     borderWidth: "1px",
-    borderColor: "green !important"
+    //borderColor: "green !important"
   },
 }));
 
 export default function SignIn(props) {
+
   const classes = useStyles();
+  if (authenticationService.currentUserValue) {
+    history.push('/');
+  }
+
   return (
+
     <Container maxWidth="xs">
       <div className={classes.paper}>
         <Typography component="h1" variant="h5">
           Sign in
         </Typography>
-        <form className={classes.form} noValidate>
-          <TextField InputProps={{
-                classes: {
-                  notchedOutline: classes.notchedOutline
+        <Formik
+          initialValues={{
+            email: '',
+            password: ''
+          }}
+          validationSchema={Yup.object().shape({
+            email: Yup.string().email().required('Email is required'),
+            password: Yup.string().required('Password is required')
+          })}
+          onSubmit={({ email, password }, { setStatus, setSubmitting }) => {
+            setStatus();
+            authenticationService.login(email, password)
+              .then(
+                user => {
+                  const { from } = props.location.state || { from: { pathname: "/" } };
+                  props.history.push(from);
+                },
+                error => {
+                  setSubmitting(false);
+                  setStatus(error);
                 }
-              }} variant="outlined" margin="normal" required fullWidth id="email" label="Email Address" name="email" autoComplete="email" autoFocus/>
-          <TextField variant="outlined" margin="normal" required fullWidth name="password" label="Password" type="password" id="password" autoComplete="current-password"/>
-          <FormControlLabel control={<Checkbox value="remember" color="primary" />} label="Remember me" />
-          <Button type="submit" fullWidth variant="contained" color="primary" className={classes.submit}>
-            Sign In
-          </Button>
-          <Grid container>
-            <Grid item xs>
-              <Link to="#" variant="body2">
-                Forgot password?
+              );
+          }}
+        >
+          {(props) => {
+            const {
+              values,
+              touched,
+              errors,
+              status,
+              isSubmitting,
+              handleChange,
+              handleSubmit,
+
+            } = props;
+            return (
+
+              <form className={classes.form} onSubmit={handleSubmit}>
+                {status &&
+                  <Box my={2} color="error.main">
+
+                    {status}
+                  </Box>
+                }
+                <TextField InputProps={{
+                  classes: {
+                    notchedOutline: classes.notchedOutline
+                  }
+                }} variant="outlined" margin="normal" onChange={handleChange} value={values.email} error={errors.email && touched.email} helperText={(errors.email && touched.email) && errors.email} fullWidth id="email" label="Email Address" name="email" autoFocus />
+                <TextField variant="outlined" onChange={handleChange}  margin="normal" value={values.password} error={errors.password && touched.password} helperText={(errors.password && touched.password) && errors.password} fullWidth name="password" label="Password" type="password" id="password" />
+                <Button type="submit" disabled={isSubmitting} fullWidth variant="contained" color="primary" className={classes.submit}>Sign In</Button>
+
+
+              </form>
+
+            );
+
+          }}
+        </Formik>
+        <Grid container>
+          <Grid item xs>
+            <Link to="/reset" variant="body2">
+              Forgot password?
               </Link>
-            </Grid>
-            <Grid item>
-              <Link to="/signup">
-                {"Don't have an account? Sign Up"}
-              </Link>
-            </Grid>
           </Grid>
-        </form>
+          <Grid item>
+            <Link to="/signup">
+              {"Don't have an account? Sign Up"}
+            </Link>
+          </Grid>
+        </Grid>
       </div>
+
     </Container>
-  );
+  )
+
+
 }
