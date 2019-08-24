@@ -27,9 +27,11 @@ import actors.reporter.MarketDataPublisher
 import actors.reporter.MarketDataReceiver
 import actors.reporter.MarketDataRelay
 import actors.reporter.MarketEventsRelay
+import akka.stream.OverflowStrategy
+import actors.reporter.MarketReporter.TradesRequest
 
 @Singleton
-class Application @Inject() (cc: ControllerComponents, configuration: play.api.Configuration, withSession: SessionKey)(implicit system: ActorSystem, mat: Materializer) extends AbstractController(cc) with OrdersApi {
+class Application @Inject() (cc: ControllerComponents, configuration: play.api.Configuration, clientAction: ClientAction, ostKey: SystemKey)(implicit system: ActorSystem, mat: Materializer) extends AbstractController(cc) with OrdersApi {
 
   implicit def executionContext: ExecutionContextExecutor = system.dispatcher
 
@@ -38,9 +40,9 @@ class Application @Inject() (cc: ControllerComponents, configuration: play.api.C
   val publisher = system.actorOf(Props[MarketDataPublisher], "market-data-publisher")
 
   new Thread(new MarketDataReceiver(configuration.underlying, publisher)).start
-  
+
   val marketEventsPublisher = system.actorOf(Props[MarketEventsPublisher], "market-events-publisher")
-  
+
   new Thread(new MarketEventsReceiver(configuration.underlying, marketEventsPublisher)).start
 
   def createOrderEntryApi(): ActorRef = {
@@ -50,45 +52,38 @@ class Application @Inject() (cc: ControllerComponents, configuration: play.api.C
   }
 
   def newOrder = Action.async(parse.json) { request =>
-      val newOrderJson = request.body.validate[EnterOrder]
-      newOrderJson.fold(
-        errors => {
-          Future.successful(BadRequest(Json.obj("status" -> 400, "message" -> JsError.toJson(errors))))
-        },
-        newOrder => {
-          enterOrder(newOrder).map { orderEntered =>
-            Ok(Json.toJson(orderEntered))
-          }
-
-        })
-  }
-  
-  def securedOrder = withSession.async(parse.json) { request =>
-      val newOrderJson = request.body.validate[EnterOrder]
-      newOrderJson.fold(
-        errors => {
-          Future.successful(BadRequest(Json.obj("status" -> 400, "message" -> JsError.toJson(errors))))
-        },
-        newOrder => {
-          enterOrder(newOrder).map { orderEntered =>
-            Ok(Json.toJson(orderEntered))
-          }
-
-        })
-  }
-
-  def orders = Action.async(parse.json) { request =>
-    val ordersJson = request.body.validate[OrdersRequest]
-    ordersJson.fold(
+    val newOrderJson = request.body.validate[EnterOrder]
+    newOrderJson.fold(
       errors => {
         Future.successful(BadRequest(Json.obj("status" -> 400, "message" -> JsError.toJson(errors))))
       },
-      ordersRequest => {
-        getOrders(ordersRequest).map { ordersResponse =>
-          Ok(Json.toJson(ordersResponse))
+      newOrder => {
+        enterOrder(newOrder).map { orderEntered =>
+          Ok(Json.toJson(orderEntered))
         }
 
       })
+  }
+
+  def securedOrder = clientAction.async(parse.json) { implicit request =>
+    val newOrderJson = request.body.validate[EnterOrder]
+    newOrderJson.fold(
+      errors => {
+        Future.successful(BadRequest(Json.obj("status" -> 400, "message" -> JsError.toJson(errors))))
+      },
+      newOrder => {
+        val clientOrder = EnterOrder(newOrder.side,newOrder.instrument,newOrder.quantity,newOrder.price,request.username)
+        enterOrder(clientOrder).map { orderEntered =>
+          Ok(Json.toJson(orderEntered))
+        }
+
+      })
+  }
+
+  def orders = clientAction.async { request =>
+    getOrders(OrdersRequest(request.username)).map { ordersResponse =>
+          Ok(Json.toJson(ordersResponse))
+    }
   }
 
   def data = WebSocket.accept[JsValue, JsValue] { request =>
@@ -96,11 +91,23 @@ class Application @Inject() (cc: ControllerComponents, configuration: play.api.C
       Props(new MarketDataRelay(publisher, out))
     }
   }
-  
-  def trades = WebSocket.accept[JsValue, JsValue] { request =>
-    ActorFlow.actorRef { out =>
-      Props(new MarketEventsRelay(marketEventsPublisher, out))
-    }
+  /* oveflowstrategy is dropNew - if buffer size is exceeded, elements will be dropped and not sent to client socket
+   * see WebSockets may drop outgoing messages #6246
+   */
+  def trades = WebSocket.acceptOrResult[JsValue, JsValue] { request =>
+    val userKey = request.getQueryString(ClientAction.OST_KEY).getOrElse(None)
+    logger.debug(s"Connection to Market Reporting with user key:${userKey}")
+    Future.successful(
+      userKey match {
+        case None => Left(Forbidden)
+        case u:String => {
+          val usr = new String(ostKey.key.open(u.asInstanceOf[String].getBytes))
+          logger.debug(s"Connection to Market Reporting with user:${usr}")
+          Right(ActorFlow.actorRef({ out =>
+            Props(new MarketEventsRelay(marketEventsPublisher, out, usr))
+          }, 100))
+        }
+      })
   }
-  
+
 }

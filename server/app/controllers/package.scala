@@ -32,15 +32,25 @@ class SystemKey @Inject() (config: play.api.Configuration) {
   val key = new SecretKey(Base62.createInstance().decode(config.get[String]("ost.key").getBytes))
 }
 
-class SessionKey @Inject() (parser: BodyParsers.Default, ostKey: SystemKey)(implicit ec: ExecutionContext)
-  extends ActionBuilderImpl(parser) {
-  val logger: Logger = Logger("application")
-  override def invokeBlock[A](request: Request[A], block: (Request[A]) => Future[Result]) = {
+object ClientAction {
+  
+ final val OST_KEY = "OST";
+  
+}
 
-    val token: String = request.headers.get("OST").getOrElse("")
-    logger.info("OST: " + token)
+
+class ClientAction @Inject()(val parser: BodyParsers.Default, ostKey: SystemKey)(implicit val executionContext: ExecutionContext)
+    extends ActionBuilder[ClientRequest, AnyContent]
+    with ActionTransformer[Request, ClientRequest] {
+  import ClientAction._
+  
+  val logger: Logger = Logger("application")
+  def transform[A](request: Request[A]) = Future.successful {
+    val token: String = request.headers.get(OST_KEY).getOrElse("")
+    logger.info(OST_KEY+": " + token)
     val user = new String(ostKey.key.open(token.getBytes))
-    block(ClientRequest(user, request))
+    logger.debug(s"Client request: $user")
+    new ClientRequest(user, request)
   }
 }
 

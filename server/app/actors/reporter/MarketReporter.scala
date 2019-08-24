@@ -11,25 +11,36 @@ import scala.collection.JavaConverters._
 import akka.actor.actorRef2Scala
 import play.api.libs.json.Json
 import akka.actor.ActorLogging
+import controllers.SystemKey
+import play.api.libs.json.JsValue
+import com.paritytrading.foundation.ASCII
 
-sealed trait MarketEvent
+object MarketReporter {
 
-case class TradeEvent(
-  instrument:      String,
-  price:           Long,
-  timestamp:       String,
-  matchNumber:     Long,
-  quantity:        Long,
-  buyer:           String,
-  buyOrderNumber:  Long,
-  seller:          String,
-  sellOrderNumber: Long) extends MarketEvent
+  sealed trait MarketEvent
 
-case object MarketEventsRequest
+  case class TradeEvent(
+    instrument:      String,
+    price:           Long,
+    timestamp:       String,
+    matchNumber:     Long,
+    quantity:        Long,
+    buyer:           String,
+    buyOrderNumber:  Long,
+    seller:          String,
+    sellOrderNumber: Long) extends MarketEvent
 
-case object PMRInstrumentsRequest
+  case class TradesRequest(client: String)
+
+  case object MarketEventsRequest
+
+  case object PMRInstrumentsRequest
+
+}
 
 class MarketEventsReceiver(config: Config, publisher: ActorRef) extends Runnable {
+
+  import MarketReporter._
 
   override def run {
     val multicastInterface = Configs.getNetworkInterface(config, "market-report.multicast-interface")
@@ -61,15 +72,15 @@ class MarketEventsReceiver(config: Config, publisher: ActorRef) extends Runnable
         }
         override def trade(message: PMRTrade) {
           publisher ! TradeEvent(
-              message.instrument,
-              message.price,
-              message.timestamp,
-              message.matchNumber,
-              message.quantity,
-              message.buyer,
-              message.buyOrderNumber,
-              message.seller,
-              message.sellOrderNumber)
+            message.instrument,
+            message.price,
+            message.timestamp,
+            message.matchNumber,
+            message.quantity,
+            message.buyer,
+            message.buyOrderNumber,
+            message.seller,
+            message.sellOrderNumber)
         }
 
       })))
@@ -78,12 +89,14 @@ class MarketEventsReceiver(config: Config, publisher: ActorRef) extends Runnable
 
 class MarketEventsPublisher extends Actor {
 
+  import MarketReporter._
+
   var instruments: Instruments = null
   var trades = Vector[TradeEvent]()
 
   def receive = {
     case trade: TradeEvent =>
-      trades = trades :+trade
+      trades = trades :+ trade
       context.system.eventStream.publish(trade)
     case instruments: Instruments =>
       this.instruments = instruments
@@ -91,11 +104,17 @@ class MarketEventsPublisher extends Actor {
       sender ! instruments
     case MarketEventsRequest =>
       trades.foreach(sender ! _)
+    case TradesRequest(client) => {
+      trades.filter(p =>
+        p.buyer.equals(client) || p.seller.equals(client)).foreach(sender ! _)
+    }
   }
 
 }
 
-class MarketEventsRelay(publisher: ActorRef, out: ActorRef) extends Actor with ActorLogging{
+class MarketEventsRelay(publisher: ActorRef, out: ActorRef, client:String) extends Actor with ActorLogging {
+
+  import MarketReporter._
 
   override def preStart {
     publisher ! PMRInstrumentsRequest
@@ -106,15 +125,15 @@ class MarketEventsRelay(publisher: ActorRef, out: ActorRef) extends Actor with A
   }
 
   def receive = {
-    case trade: TradeEvent =>
+    case trade: TradeEvent if trade.buyer.equals(client) || trade.seller.equals(client) =>
       out ! Json.obj(
         "type" -> "Trade",
+        "timestamp" -> trade.timestamp,
         "instrument" -> trade.instrument,
         "price" -> trade.price,
         "size" -> trade.quantity,
-        "buyOrderNumber" -> trade.buyOrderNumber,
-        "sellOrderNumber" -> trade.sellOrderNumber,
-        "matchNumber"->trade.matchNumber)
+        if (trade.buyer.equals(client)) "buyOrderNumber" -> trade.buyOrderNumber else "sellOrderNumber" -> trade.sellOrderNumber,
+        "matchNumber" -> trade.matchNumber)
     case instruments: Instruments =>
       instruments.asScala.foreach { instrument =>
         out ! Json.obj(
@@ -125,8 +144,11 @@ class MarketEventsRelay(publisher: ActorRef, out: ActorRef) extends Actor with A
           "priceFractionDigits" -> instrument.getPriceFractionDigits(),
           "sizeFractionDigits" -> instrument.getSizeFractionDigits())
       }
-      publisher ! MarketEventsRequest
+      
       context.system.eventStream.subscribe(self, classOf[MarketEvent])
+      
+      publisher ! TradesRequest(client)
+
     case _ =>
       Unit
   }

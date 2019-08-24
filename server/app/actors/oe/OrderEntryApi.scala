@@ -99,7 +99,7 @@ import actors.oe.Orders;
 
     this.orderTracker.add(client, orderId)
 
-    log.info("\nOrder ID\n----------------\n{}\n\n", orderId)
+    log.info("Order ID:{}, Client:{}", orderId,client)
 
     sender() ! OrderEntered(orderId)
 
@@ -108,6 +108,8 @@ import actors.oe.Orders;
   def orders(client: String) {
 
     var Orders = new Orders(client)
+    
+    log.debug(s"Fetching orders from:${client}")
 
     val ordersResult = Orders.collect(events, orderTracker)
 
