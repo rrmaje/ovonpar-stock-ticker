@@ -2,6 +2,7 @@ GET    /data            controllers.Application.data
 GET    /trades            controllers.Application.trades
 POST   /v1/orders/new   controllers.Application.newOrder
 POST   /v2/orders/new   controllers.Application.securedOrder
+POST   /v2/orders/cancel   controllers.Application.cancel
 GET   /v1/orders   controllers.Application.orders
 POST   /v1/login   controllers.AuthenticationController.login
 POST   /v1/login/genhash   controllers.AuthenticationController.genhash

@@ -47,7 +47,7 @@ class ClientAction @Inject()(val parser: BodyParsers.Default, ostKey: SystemKey)
   val logger: Logger = Logger("application")
   def transform[A](request: Request[A]) = Future.successful {
     val token: String = request.headers.get(OST_KEY).getOrElse("")
-    logger.info(OST_KEY+": " + token)
+    logger.debug(OST_KEY+": " + token)
     val user = new String(ostKey.key.open(token.getBytes))
     logger.debug(s"Client request: $user")
     new ClientRequest(user, request)
@@ -81,7 +81,7 @@ class AuthenticationController @Inject() (cc: ControllerComponents, ostKey: Syst
           user match {
             case User(a, b, d) => {
               val encoded = ostKey.key.seal(d.getBytes());
-              logger.info("Response-OST: " + new String(encoded))
+              logger.debug("Response-OST: " + new String(encoded))
               Ok(Json.obj("status" -> 200, "message" -> Json.obj("id" -> a, "username" -> b, "token" -> new String(encoded))))
             }
             case _ => BadRequest(Json.obj("status" -> 401, "message" -> "Incorrect credentials"))
@@ -140,7 +140,7 @@ class AuthenticationController @Inject() (cc: ControllerComponents, ostKey: Syst
           user match {
             case User(a, b, d) => {
               val encoded = ostKey.key.seal(d.getBytes());
-              logger.info("Response-OST: " + new String(encoded))
+              logger.debug("Response-OST: " + new String(encoded))
               Ok(Json.obj("status" -> 200, "message" -> Json.obj("id" -> a, "username" -> b, "token" -> new String(encoded))))
             }
             case UserExists(b) => BadRequest(Json.obj("status" -> 401, "message" -> "Login in use"))

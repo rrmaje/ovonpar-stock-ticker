@@ -18,7 +18,9 @@ object OrderEntryApi {
 
   case object ConnectToOrderEntry
 
-  case class EnterOrder(side: Byte, instrument: String, quantity: Double, price: Double, client: String)
+  case class EnterOrder(side: Byte, instrument: String, quantity: Double, price: Double)
+
+  case class ClientOrder(side: Byte, instrument: String, quantity: Double, price: Double, client: String)
 
   case class OrderResponse(orderId: String, side: Byte, instrument: String, quantity: Long, price: Long)
 
@@ -26,7 +28,7 @@ object OrderEntryApi {
 
   case class OrdersResponse(orders: Vector[OrderResponse])
 
-  case class CancelOrder(orderId: String)
+  case class CancelOrder(client: String, orderId: String)
 
   case class OrderEntered(orderId: String)
 
@@ -35,10 +37,10 @@ object OrderEntryApi {
 class OrderEntryApi(config: Config) extends Actor with akka.actor.ActorLogging {
 
   import OrderEntryApi._
-import actors.oe.Events;
-import actors.oe.OrderEntry;
-import actors.oe.OrderTracker;
-import actors.oe.Orders;
+  import actors.oe.Events;
+  import actors.oe.OrderEntry;
+  import actors.oe.OrderTracker;
+  import actors.oe.Orders;
 
   var orderIdGenerator = new OrderIDGenerator()
 
@@ -51,6 +53,8 @@ import actors.oe.Orders;
   var orderTracker: OrderTracker = null
 
   val message: POE.EnterOrder = new POE.EnterOrder()
+
+  val cancelMessage: POE.CancelOrder = new POE.CancelOrder()
 
   private def open(config: Config) {
     val orderEntryAddress = Configs.getInetAddress(config, "order-entry.address")
@@ -99,7 +103,7 @@ import actors.oe.Orders;
 
     this.orderTracker.add(client, orderId)
 
-    log.info("Order ID:{}, Client:{}", orderId,client)
+    log.info("Order ID:{}, Client:{}", orderId, client)
 
     sender() ! OrderEntered(orderId)
 
@@ -108,8 +112,8 @@ import actors.oe.Orders;
   def orders(client: String) {
 
     var Orders = new Orders(client)
-    
-    log.debug(s"Fetching orders from:${client}")
+
+    log.debug(s"Fetching Orders - Client: ${client}")
 
     val ordersResult = Orders.collect(events, orderTracker)
 
@@ -119,13 +123,28 @@ import actors.oe.Orders;
 
   }
 
+  def cancelOrder(client: String, orderId: String) {
+
+    ASCII.putLeft(cancelMessage.orderId, orderId)
+    cancelMessage.quantity = 0
+
+    this.orderEntry.send(cancelMessage)
+    
+    this.orderTracker.remove(client, orderId)
+
+    log.info("Cancel Order instruction sent, Order ID:{}, Client:{}", orderId, client)
+
+  }
+
   def receive = {
     case ConnectToOrderEntry =>
       open(config)
-    case EnterOrder(side, instrumentCode, quantity, price, client) =>
+    case ClientOrder(side, instrumentCode, quantity, price, client) =>
       enterOrder(side, quantity, instrumentCode, price, client)
     case OrdersRequest(client) =>
       orders(client)
+    case CancelOrder(client, orderId) =>
+      cancelOrder(client, orderId)
     case _ => Unit
   }
 
