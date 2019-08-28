@@ -12,7 +12,7 @@ Application implements REST Api for order management
 Build
 -----
 
-Ovonpar system(modified parity system) must be running.
+Ovonpar system(modified Parity system) must be running.
 
 [parity-system] must be aded to hosts and point to machine with Parity system process running
 
