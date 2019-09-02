@@ -274,6 +274,7 @@ class LoginDb extends Actor with akka.actor.ActorLogging {
     userTuple match {
       case None => {
         val d = String.valueOf(generateParityID(username))
+        log.debug("New 16 bytes id:" + d)
         val user = (key.incrementAndGet(), username, password, d)
         users = users :+ user
         sender ! User(user._1, user._2, user._4)
@@ -295,9 +296,8 @@ class LoginDb extends Actor with akka.actor.ActorLogging {
     sb.toString
   }
 
-  private def generateParityID(username: String) {
+  private def generateParityID(username: String):Long = {
     val id = if (username.length() > 8) username.substring(0, 8) else username
-    log.debug("New 8 char id:" + id)
     ASCII.packLong(id)
   }
 
