@@ -51,7 +51,6 @@ class Application @Inject() (cc: ControllerComponents, configuration: play.api.C
 
   def createOrderEntryApi(): ActorRef = {
     val orderEntry = system.actorOf(OrderEntryApi.props(configuration.underlying), "order-entry")
-    orderEntry ! ConnectToOrderEntry
     orderEntry
   }
 
@@ -121,13 +120,14 @@ class Application @Inject() (cc: ControllerComponents, configuration: play.api.C
    */
   def trades = WebSocket.acceptOrResult[JsValue, JsValue] { request =>
     val userKey = request.getQueryString(ClientAction.OST_KEY).getOrElse(None)
-    logger.debug(s"Connection to Market Reporting with user key:${userKey}")
+    val rNo = new scala.util.Random().nextInt(1000000)
+    logger.debug(s"[$rNo] Connection to Market Reporting with user key:$userKey")
     Future.successful(
       userKey match {
         case None => Left(Forbidden)
         case u: String => {
           val usr = new String(ostKey.key.open(u.asInstanceOf[String].getBytes))
-          logger.debug(s"Connection to Market Reporting with user:${usr}")
+          logger.debug(s"[$rNo] Client request: ${usr}")
           Right(ActorFlow.actorRef({ out =>
             Props(new MarketEventsRelay(marketEventsPublisher, out, usr))
           }, 100))

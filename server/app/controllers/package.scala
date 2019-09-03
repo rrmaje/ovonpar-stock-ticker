@@ -22,7 +22,6 @@ import akka.util.Timeout
 import scala.concurrent.duration._
 import akka.pattern.ask
 import scala.concurrent.ExecutionContextExecutor
-import com.paritytrading.foundation.ASCII
 import java.util.concurrent.atomic.AtomicInteger
 
 case class ClientRequest[A](username: String, request: Request[A]) extends WrappedRequest(request)
@@ -273,8 +272,8 @@ class LoginDb extends Actor with akka.actor.ActorLogging {
     val userTuple = users.find(v => { v._2 == username }).getOrElse(None)
     userTuple match {
       case None => {
-        val d = String.valueOf(generateParityID(username))
-        log.debug("New 16 bytes id:" + d)
+        val d = generateParityID()
+        
         val user = (key.incrementAndGet(), username, password, d)
         users = users :+ user
         sender ! User(user._1, user._2, user._4)
@@ -296,9 +295,17 @@ class LoginDb extends Actor with akka.actor.ActorLogging {
     sb.toString
   }
 
-  private def generateParityID(username: String):Long = {
-    val id = if (username.length() > 8) username.substring(0, 8) else username
-    ASCII.packLong(id)
+  private def generateParityID():String = {
+
+    val sb = new StringBuilder()
+    val r = new scala.util.Random()
+    val chars = ('a' to 'z') ++ ('A' to 'Z') ++ ('0' to '9')
+    for(i <- 1 to 8){
+      sb.append(chars(r.nextInt(chars.length)))
+    }
+    log.debug("New 8 bytes id:" + sb.toString)
+    sb.toString
+
   }
 
 }

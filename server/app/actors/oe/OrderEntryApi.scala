@@ -137,8 +137,10 @@ class OrderEntryApi(config: Config) extends Actor with akka.actor.ActorLogging {
   }
 
   def receive = {
+    /*
     case ConnectToOrderEntry =>
       open(config)
+    */
     case ClientOrder(side, instrumentCode, quantity, price, client) =>
       enterOrder(side, quantity, instrumentCode, price, client)
     case OrdersRequest(client) =>
@@ -149,11 +151,15 @@ class OrderEntryApi(config: Config) extends Actor with akka.actor.ActorLogging {
   }
 
   override def preStart {
-
+      open(config)
   }
 
   override def postStop {
-    this.orderEntry.close();
+    Option[OrderEntry](this.orderEntry) match {
+      case Some(oe) =>
+        oe.close()
+      case None => 
+    }
   }
 
 }
