@@ -37,10 +37,6 @@ object OrderEntryApi {
 class OrderEntryApi(config: Config) extends Actor with akka.actor.ActorLogging {
 
   import OrderEntryApi._
-  import actors.oe.Events;
-  import actors.oe.OrderEntry;
-  import actors.oe.OrderTracker;
-  import actors.oe.Orders;
 
   var orderIdGenerator = new OrderIDGenerator()
 
@@ -49,8 +45,6 @@ class OrderEntryApi(config: Config) extends Actor with akka.actor.ActorLogging {
   var instruments: Instruments = null
 
   var events: Events = null
-
-  var orderTracker: OrderTracker = null
 
   val message: POE.EnterOrder = new POE.EnterOrder()
 
@@ -67,8 +61,6 @@ class OrderEntryApi(config: Config) extends Actor with akka.actor.ActorLogging {
     this.instruments = Instruments.fromConfig(config, "instruments")
 
     this.events = new Events()
-
-    this.orderTracker = new OrderTracker()
 
     this.orderEntry = OrderEntry.open(address, events);
 
@@ -101,8 +93,6 @@ class OrderEntryApi(config: Config) extends Actor with akka.actor.ActorLogging {
 
     this.orderEntry.send(message)
 
-    this.orderTracker.add(client, orderId)
-
     log.info("Order ID:{}, Client:{}", orderId, client)
 
     sender() ! OrderEntered(orderId)
@@ -115,7 +105,7 @@ class OrderEntryApi(config: Config) extends Actor with akka.actor.ActorLogging {
 
     log.debug(s"Fetching Orders - Client: ${client}")
 
-    val ordersResult = Orders.collect(events, orderTracker)
+    val ordersResult = Orders.collect(events)
 
     val ordersResponse = ordersResult.asScala.map(x => OrderResponse(x.getOrderId, x.getSide, ASCII.unpackLong(x.getInstrument).trim(), x.getQuantity, x.getPrice)).toVector
 
@@ -129,8 +119,6 @@ class OrderEntryApi(config: Config) extends Actor with akka.actor.ActorLogging {
     cancelMessage.quantity = 0
 
     this.orderEntry.send(cancelMessage)
-    
-    this.orderTracker.remove(client, orderId)
 
     log.info("Cancel Order instruction sent, Order ID:{}, Client:{}", orderId, client)
 

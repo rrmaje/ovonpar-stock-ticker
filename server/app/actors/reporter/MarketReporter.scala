@@ -14,6 +14,20 @@ import akka.actor.ActorLogging
 import controllers.SystemKey
 import play.api.libs.json.JsValue
 import com.paritytrading.foundation.ASCII
+import scala.concurrent.ExecutionContext
+import akka.util.Timeout
+import scala.concurrent.duration._
+import akka.pattern.ask
+import controllers.EmailByParityUser
+import scala.concurrent.ExecutionContext.Implicits.global
+
+import play.api.libs.ws._
+import play.api.libs.json._
+import scala.concurrent.Future
+import play.api.db.Database
+import model.UserRepository
+import javax.inject.Inject
+import akka.pattern.AskTimeoutException
 
 object MarketReporter {
 
@@ -87,7 +101,7 @@ class MarketEventsReceiver(config: Config, publisher: ActorRef) extends Runnable
   }
 }
 
-class MarketEventsPublisher extends Actor {
+class MarketEventsPublisher extends Actor with ActorLogging {
 
   import MarketReporter._
 
@@ -100,6 +114,8 @@ class MarketEventsPublisher extends Actor {
       context.system.eventStream.publish(trade)
     case instruments: Instruments =>
       this.instruments = instruments
+      log.debug("Received instruments")
+      context.system.eventStream.publish(instruments)
     case PMRInstrumentsRequest =>
       sender ! instruments
     case MarketEventsRequest =>
@@ -112,7 +128,7 @@ class MarketEventsPublisher extends Actor {
 
 }
 
-class MarketEventsRelay(publisher: ActorRef, out: ActorRef, client:String) extends Actor with ActorLogging {
+class MarketEventsRelay(publisher: ActorRef, out: ActorRef, client: String) extends Actor with ActorLogging {
 
   import MarketReporter._
 
@@ -144,13 +160,98 @@ class MarketEventsRelay(publisher: ActorRef, out: ActorRef, client:String) exten
           "priceFractionDigits" -> instrument.getPriceFractionDigits(),
           "sizeFractionDigits" -> instrument.getSizeFractionDigits())
       }
-      
+
       context.system.eventStream.subscribe(self, classOf[MarketEvent])
-      
+
       publisher ! TradesRequest(client)
 
     case _ =>
       Unit
+  }
+
+}
+
+class MarketEventsMailer(ws: WSClient, config: play.api.Configuration, publisher: ActorRef, userService: UserRepository) extends Actor with ActorLogging {
+
+  import MarketReporter._
+
+  implicit val timeout = Timeout(5 seconds)
+
+  var instruments: Instruments = null
+
+  var fmt: MailFormat = null
+
+  val mailerUrl = config.get[String]("mailer.url")
+
+  override def preStart {
+    context.system.eventStream.subscribe(self, classOf[Instruments])
+  }
+
+  override def postStop {
+    context.system.eventStream.unsubscribe(self, classOf[MarketEvent])
+    context.system.eventStream.unsubscribe(self, classOf[Instruments])
+  }
+
+  def receive = {
+    case trade: TradeEvent =>
+      val contacts = for {
+        b <- emailFromParityUsr(trade.buyer)
+        s <- emailFromParityUsr(trade.seller)
+      } yield (b, s)
+      contacts.map(f => f match {
+        case (Some(b: String), Some(s: String)) => {
+          val body = String.format(fmt.format(trade), b, s)
+          log.debug("Formatted mail event:{}", body)
+          sendMail("%d-%d".format(trade.matchNumber, trade.buyOrderNumber), b, body)
+          sendMail("%d-%d".format(trade.matchNumber, trade.sellOrderNumber), s, body)
+        }
+        case _ => log.error(s"Failed to get parity user for trade number: ${trade.matchNumber}")
+      })
+
+    case instruments: Instruments =>
+      this.instruments = instruments
+      fmt = new MailFormat(instruments)
+      context.system.eventStream.subscribe(self, classOf[MarketEvent])
+    case _ =>
+      Unit
+  }
+
+  private def emailFromParityUsr(usr: String) = {
+    userService.findByParityUser(usr).map { res =>
+      val userTuple = res.getOrElse(None)
+      userTuple match {
+        case u: model.User => Some(u.username)
+        case _: AskTimeoutException => {
+          log.error(s"Timeout getting user with parity id: ${usr}")
+        }
+        case None =>
+      }
+    }
+  }
+
+  private def sendMail(id: String, receipient: String, body: String) {
+
+    val request: WSRequest = ws.url(mailerUrl)
+    val data = Json.obj(
+      "username" -> receipient,
+      "html" -> body)
+
+    val mailerRequest: WSRequest =
+      request
+        .addHttpHeaders("Accept" -> "application/json")
+        .addHttpHeaders("X-Request-Id" -> id)
+        .withRequestTimeout(10000.millis)
+
+    val futureResult: Future[Int] = mailerRequest.post(data).map { response =>
+      (response.json \ "status").as[Int]
+    }
+
+    futureResult.map(f => {
+      f match {
+        case 200 => log.debug(s"Sent match notification with X-Request-Id: $id")
+        case _   => log.error(s"Failed to send match notification with X-Request-Id: $id")
+      }
+    })
   }
 
 }

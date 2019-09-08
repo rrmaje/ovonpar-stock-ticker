@@ -33,11 +33,13 @@ import actors.reporter.MarketReporter.TradesRequest
 import com.paritytrading.parity.util.{ Instrument, Instruments }
 import scala.collection.JavaConverters._
 import actors.oe.OrderEntryApi.CancelOrder
+import actors.reporter.MarketEventsMailer
+import actors.reporter.MarketReporter.PMRInstrumentsRequest
+import play.api.libs.ws._
+import scala.concurrent.ExecutionContext.Implicits.global
 
 @Singleton
-class Application @Inject() (cc: ControllerComponents, configuration: play.api.Configuration, clientAction: ClientAction, ostKey: SystemKey)(implicit system: ActorSystem, mat: Materializer) extends AbstractController(cc) with OrdersApi {
-
-  implicit def executionContext: ExecutionContextExecutor = system.dispatcher
+class Application @Inject() (ws: WSClient, cc: AppControllerComponents, configuration: play.api.Configuration, clientAction: ClientAction)(implicit system: ActorSystem, mat: Materializer) extends AppBaseController(cc) with OrdersApi {
 
   val logger: Logger = Logger("application")
 
@@ -46,9 +48,12 @@ class Application @Inject() (cc: ControllerComponents, configuration: play.api.C
   new Thread(new MarketDataReceiver(configuration.underlying, publisher)).start
 
   val marketEventsPublisher = system.actorOf(Props[MarketEventsPublisher], "market-events-publisher")
+  
+  system.actorOf(Props(new MarketEventsMailer(ws, configuration,  marketEventsPublisher,cc.userRepo)), "market-events-mailer")
 
   new Thread(new MarketEventsReceiver(configuration.underlying, marketEventsPublisher)).start
-
+  
+ 
   def createOrderEntryApi(): ActorRef = {
     val orderEntry = system.actorOf(OrderEntryApi.props(configuration.underlying), "order-entry")
     orderEntry
@@ -126,7 +131,7 @@ class Application @Inject() (cc: ControllerComponents, configuration: play.api.C
       userKey match {
         case None => Left(Forbidden)
         case u: String => {
-          val usr = new String(ostKey.key.open(u.asInstanceOf[String].getBytes))
+          val usr = new String(cc.ostKey.key.open(u.asInstanceOf[String].getBytes))
           logger.debug(s"[$rNo] Client request: ${usr}")
           Right(ActorFlow.actorRef({ out =>
             Props(new MarketEventsRelay(marketEventsPublisher, out, usr))

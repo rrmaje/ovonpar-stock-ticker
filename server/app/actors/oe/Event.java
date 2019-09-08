@@ -15,6 +15,7 @@ interface Event {
         public final long   quantity;
         public final long   price;
         public final long   orderNumber;
+        public final long   client;
 
         public OrderAccepted(POE.OrderAccepted message) {
             this.timestamp   = message.timestamp;
@@ -24,6 +25,7 @@ interface Event {
             this.quantity    = message.quantity;
             this.price       = message.price;
             this.orderNumber = message.orderNumber;
+            this.client = message.client;
         }
 
         @Override

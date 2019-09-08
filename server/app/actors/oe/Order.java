@@ -8,6 +8,7 @@ public class Order {
     private final long   instrument;
     private       long   quantity;
     private final long   price;
+    public final long   client;
 
     long getPrice() {
 		return price;
@@ -20,6 +21,7 @@ public class Order {
         this.instrument  = event.instrument;
         this.quantity    = event.quantity;
         this.price       = event.price;
+        this.client       = event.client;
     }
 
     void apply(Event.OrderExecuted event) {
@@ -48,6 +50,10 @@ public class Order {
 
     long getQuantity() {
         return quantity;
+    }
+    
+    long getClient() {
+        return client;
     }
 
 }

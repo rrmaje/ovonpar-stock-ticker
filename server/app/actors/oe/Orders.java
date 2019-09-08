@@ -3,15 +3,16 @@ package actors.oe;
 import static java.util.Comparator.*;
 import static java.util.stream.Collectors.*;
 
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.paritytrading.foundation.ASCII;
+
 class Orders extends DefaultEventVisitor {
 
 	private final Map<String, Order> orders;
-	
+
 	private final String username;
 
 	public Orders(String username) {
@@ -19,15 +20,15 @@ class Orders extends DefaultEventVisitor {
 		this.username = username;
 	}
 
-	List<Order> collect(Events events, OrderTracker orderTracker) {
+	List<Order> collect(Events events) {
 
 		events.accept(this);
 
-		return getEvents(orderTracker);
+		return getEvents();
 	}
 
-	private List<Order> getEvents(OrderTracker orderTracker) {
-		return orders.values().stream().filter(c -> orderTracker.contains(username, c.getOrderId()))
+	private List<Order> getEvents() {
+		return orders.values().stream().filter(c -> c.getClient() == ASCII.packLong(username))
 				.sorted(comparing(Order::getTimestamp)).collect(toList());
 	}
 
@@ -59,6 +60,5 @@ class Orders extends DefaultEventVisitor {
 		if (order.getQuantity() <= 0)
 			orders.remove(event.orderId);
 	}
-	
 
 }
