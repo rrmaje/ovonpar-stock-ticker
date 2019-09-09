@@ -1,0 +1,2 @@
+insert into parity_user (id,username,password,parityuser) values (  1,'test@foo.com','test','10101010');                                                                                       
+insert into parity_user (id,username,password,parityuser) values (  2,'test2@foo.com','test','20202020');   

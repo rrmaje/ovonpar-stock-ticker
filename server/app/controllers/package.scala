@@ -103,7 +103,6 @@ class LoginController @Inject() (cc: AppControllerComponents)(implicit system: A
       },
       credentials => {
         findUser(credentials.username, credentials.password).map(user => {
-          println("After Actor call..")
           val usr = user.getOrElse(None)
           usr match {
             case User(a, b, d) => {

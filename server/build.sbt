@@ -28,7 +28,7 @@ libraryDependencies ++= Seq(
   jdbc,
   "org.playframework.anorm" %% "anorm" % "2.6.2"
 )
-libraryDependencies += "com.h2database" % "h2" % "1.4.199"
+libraryDependencies += "org.postgresql" % "postgresql" % "9.4-1200-jdbc41"
 
 dockerBaseImage := "openjdk:jre"
 dockerUsername := Some("rrmaje")

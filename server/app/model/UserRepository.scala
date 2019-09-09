@@ -26,10 +26,10 @@ class UserRepository @Inject() (dbapi: DBApi)(implicit ec: DatabaseExecutionCont
   private val db = dbapi.database("default")
 
   private val simple = {
-    get[Option[Long]]("user.id") ~
-      get[String]("user.username") ~
-      get[String]("user.password") ~
-      get[String]("user.parityuser") map {
+    get[Option[Long]]("parity_user.id") ~
+      get[String]("parity_user.username") ~
+      get[String]("parity_user.password") ~
+      get[String]("parity_user.parityuser") map {
         case id ~ username ~ password ~ parityuser =>
           User(id, username, password, parityuser)
       }
@@ -38,7 +38,7 @@ class UserRepository @Inject() (dbapi: DBApi)(implicit ec: DatabaseExecutionCont
   def insert(user: User): Future[Option[Long]] = Future {
     db.withConnection { implicit connection =>
      SQL("""
-        insert into user(username,password,parityuser) values (
+        insert into parity_user(username,password,parityuser) values (
           {username}, {password}, {parityuser}
         )
       """).bind(user).executeInsert()
@@ -47,26 +47,26 @@ class UserRepository @Inject() (dbapi: DBApi)(implicit ec: DatabaseExecutionCont
   
   def findByUsername(username: String): Future[Option[User]] = Future {
     db.withConnection { implicit connection =>
-      SQL"select * from user where username = $username".as(simple.singleOpt)
+      SQL"select * from parity_user where username = $username".as(simple.singleOpt)
     }
   }(ec)
   
   def findByParityUser(username: String): Future[Option[User]] = Future {
     db.withConnection { implicit connection =>
-      SQL"select * from user where parityuser = $username".as(simple.singleOpt)
+      SQL"select * from parity_user where parityuser = $username".as(simple.singleOpt)
     }
   }(ec)
   
   def findByUsernameAndPasword(username: String, password: String): Future[Option[User]] = Future {
     db.withConnection { implicit connection =>
-      SQL"select * from user where username = $username and password = $password".as(simple.singleOpt)
+      SQL"select * from parity_user where username = $username and password = $password".as(simple.singleOpt)
     }
   }(ec)
   
   def update(id: Long, user:User) = Future {
     db.withConnection { implicit connection =>
       SQL("""
-        update user set username = {username}, password = {password}, 
+        update parity_user set username = {username}, password = {password}, 
           parityuser = {parityuser}
         where id = {id}
       """).bind(user.copy(id = Some(id)/* ensure */)).executeUpdate()
