@@ -1,3 +1,5 @@
+import com.typesafe.sbt.packager.docker._
+
 name := "parity-ticker"
 
 version := "0.1.0-SNAPSHOT"
@@ -32,4 +34,11 @@ libraryDependencies += "org.postgresql" % "postgresql" % "9.4-1200-jdbc41"
 
 dockerBaseImage := "openjdk:jre"
 dockerUsername := Some("rrmaje")
+dockerCommands ++= Seq(
+Cmd("USER", "root"),
+  ExecCmd("RUN",
+    "apt-get", "update"),
+ExecCmd("RUN",
+    "apt-get", "install","-y","haveged")
+)
 lazy val root = (project in file(".")).enablePlugins(PlayScala)

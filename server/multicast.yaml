@@ -1,0 +1,19 @@
+apiVersion: apps/v1 
+kind: Deployment
+metadata:
+    name: stack
+spec:
+    selector:
+        matchLabels:
+            app: nodes
+    replicas: 6
+    template:
+        metadata:
+            labels:
+                app: nodes
+        spec:
+            containers:
+            - name: stack
+              image: srp3/stack:v5
+              ports:
+                  - containerPort: 9618

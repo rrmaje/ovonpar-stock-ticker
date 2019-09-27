@@ -27,6 +27,7 @@ class LoginDb(userRepo: UserRepository) extends Actor with akka.actor.ActorLoggi
           val userTuple = result.getOrElse(None)
           userTuple match {
             case u: model.User => {
+              log.debug("Login successful, user: {}, {}",u.username, u.parityuser)
               Some(User(u.id.get, u.username, u.parityuser))
             }
             case _ => None

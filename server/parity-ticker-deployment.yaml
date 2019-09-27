@@ -1,0 +1,31 @@
+apiVersion: apps/v1 #  for k8s versions before 1.9.0 use apps/v1beta2  and before 1.8.0 use extensions/v1beta1
+kind: Deployment
+metadata:
+  name: parity-ticker
+spec:
+  selector:
+    matchLabels:
+      app: parity-ticker
+  replicas: 6
+  template:
+    metadata:
+      labels:
+        app: parity-ticker
+    spec:
+      containers:
+      - name: ticker 
+        image: docker.io/rrmaje/parity-ticker:0.1.0-SNAPSHOT
+        imagePullPolicy: Always
+        env:
+            - name: OST_MAILER_URL
+              value: "http://35.204.16.24:3010/market/trade"
+            - name: OST_POSTGRES_URL
+              value: "jdbc:postgresql://10.164.0.3:5432/postgres"
+            - name: OST_MULTICAST_INTERFACE
+              value: "eth0" 
+            - name: OST_REQUEST_ADDRESS
+              value: "10.55.251.30"
+            - name: OST_SERVICE_URL
+              value: "35.204.211.84" 
+        ports:
+        - containerPort: 9000
