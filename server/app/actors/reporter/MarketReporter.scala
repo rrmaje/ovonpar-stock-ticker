@@ -3,7 +3,7 @@ package actors.reporter
 import akka.actor.{ Actor, ActorRef }
 import com.paritytrading.parity.net.pmr.{ PMR, PMRParser }
 import com.paritytrading.parity.util.{ Instrument, Instruments }
-import com.paritytrading.nassau.util.MoldUDP64
+import com.paritytrading.nassau.util.SoupBinTCP;
 import com.typesafe.config.Config
 import java.net.InetSocketAddress
 import org.jvirtanen.config.Configs
@@ -57,20 +57,17 @@ class MarketEventsReceiver(config: Config, publisher: ActorRef) extends Runnable
   import MarketReporter._
 
   override def run {
-    val multicastInterface = Configs.getNetworkInterface(config, "market-report.multicast-interface")
-    val multicastGroup = Configs.getInetAddress(config, "market-report.multicast-group")
-    val multicastPort = Configs.getPort(config, "market-report.multicast-port")
-    val requestAddress = Configs.getInetAddress(config, "market-report.request-address")
-    val requestPort = Configs.getPort(config, "market-report.request-port")
+    
+    val address = Configs.getInetAddress(config, "trade-report.address");
+    val port = Configs.getPort(config, "trade-report.port");
+    val username = config.getString("trade-report.username");
+    val password = config.getString("trade-report.password");
 
     var instruments = Instruments.fromConfig(config, "instruments")
 
     publisher ! instruments
 
-    MoldUDP64.receive(
-      multicastInterface,
-      new InetSocketAddress(multicastGroup, multicastPort),
-      new InetSocketAddress(requestAddress, requestPort),
+    SoupBinTCP.receive(new InetSocketAddress(address, port), username, password,
       new PMRParser(new TradeProcessor(new TradeListener {
 
         override def version(message: PMR.Version) {

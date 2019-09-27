@@ -1,11 +1,11 @@
 package actors.reporter
 
-import akka.actor.{Actor, ActorRef}
+import akka.actor.{ Actor, ActorRef }
 import com.paritytrading.foundation.ASCII
-import com.paritytrading.parity.net.pmd.{PMD, PMDListener, PMDParser}
-import com.paritytrading.parity.book.{Market, MarketListener, OrderBook, Side}
-import com.paritytrading.parity.util.{Instrument, Instruments}
-import com.paritytrading.nassau.util.MoldUDP64
+import com.paritytrading.parity.net.pmd.{ PMD, PMDListener, PMDParser }
+import com.paritytrading.parity.book.{ Market, MarketListener, OrderBook, Side }
+import com.paritytrading.parity.util.{ Instrument, Instruments }
+import com.paritytrading.nassau.util.SoupBinTCP;
 import com.typesafe.config.Config
 import java.net.InetSocketAddress
 import org.jvirtanen.config.Configs
@@ -19,14 +19,12 @@ case class BBO(
   bidPrice:   Long,
   bidSize:    Long,
   askPrice:   Long,
-  askSize:    Long
-) extends MarketData
+  askSize:    Long) extends MarketData
 
 case class Trade(
   instrument: String,
   price:      Long,
-  size:       Long
-) extends MarketData
+  size:       Long) extends MarketData
 
 case object InstrumentsRequest
 
@@ -35,11 +33,10 @@ case object MarketDataRequest
 class MarketDataReceiver(config: Config, publisher: ActorRef) extends Runnable {
 
   override def run {
-    val multicastInterface = Configs.getNetworkInterface(config, "market-data.multicast-interface")
-    val multicastGroup     = Configs.getInetAddress(config, "market-data.multicast-group")
-    val multicastPort      = Configs.getPort(config, "market-data.multicast-port")
-    val requestAddress     = Configs.getInetAddress(config, "market-data.request-address")
-    val requestPort        = Configs.getPort(config, "market-data.request-port")
+    val address = Configs.getInetAddress(config, "market-data.address");
+    val port = Configs.getPort(config, "market-data.port");
+    val username = config.getString("market-data.username");
+    val password = config.getString("market-data.password");
 
     var instruments = Instruments.fromConfig(config, "instruments")
 
@@ -52,32 +49,27 @@ class MarketDataReceiver(config: Config, publisher: ActorRef) extends Runnable {
         val askPrice = book.getBestAskPrice()
         publisher ! BBO(
           instrument = ASCII.unpackLong(book.getInstrument()).trim,
-          bidPrice   = bidPrice,
-          bidSize    = book.getBidSize(bidPrice),
-          askPrice   = askPrice,
-          askSize    = book.getAskSize(askPrice)
-        )
+          bidPrice = bidPrice,
+          bidSize = book.getBidSize(bidPrice),
+          askPrice = askPrice,
+          askSize = book.getAskSize(askPrice))
       }
 
       override def trade(book: OrderBook, side: Side, price: Long, size: Long) {
         publisher ! Trade(
           instrument = ASCII.unpackLong(book.getInstrument()).trim,
-          price      = price,
-          size       = size
-        )
+          price = price,
+          size = size)
       }
 
     })
 
-    instruments.asScala.foreach { instrument => 
+    instruments.asScala.foreach { instrument =>
       market.open(instrument.asLong())
     }
     publisher ! instruments
 
-    MoldUDP64.receive(
-      multicastInterface,
-      new InetSocketAddress(multicastGroup, multicastPort),
-      new InetSocketAddress(requestAddress, requestPort),
+    SoupBinTCP.receive(new InetSocketAddress(address, port), username, password,
       new PMDParser(new PMDListener {
 
         override def version(message: PMD.Version) = Unit
@@ -98,15 +90,14 @@ class MarketDataReceiver(config: Config, publisher: ActorRef) extends Runnable {
           case PMD.BUY  => Side.BUY
           case PMD.SELL => Side.SELL
         }
-      })
-    )
+      }))
   }
 }
 
 class MarketDataPublisher extends Actor {
 
-  var instruments:Instruments = null
-  var bbos   = Map[String, BBO]()
+  var instruments: Instruments = null
+  var bbos = Map[String, BBO]()
   var trades = Map[String, Trade]()
 
   def receive = {
@@ -140,30 +131,27 @@ class MarketDataRelay(publisher: ActorRef, out: ActorRef) extends Actor {
   def receive = {
     case bbo: BBO =>
       out ! Json.obj(
-        "type"       -> "BBO",
+        "type" -> "BBO",
         "instrument" -> bbo.instrument,
-        "bidPrice"   -> bbo.bidPrice,
-        "bidSize"    -> bbo.bidSize,
-        "askPrice"   -> bbo.askPrice,
-        "askSize"    -> bbo.askSize
-      )
+        "bidPrice" -> bbo.bidPrice,
+        "bidSize" -> bbo.bidSize,
+        "askPrice" -> bbo.askPrice,
+        "askSize" -> bbo.askSize)
     case trade: Trade =>
       out ! Json.obj(
-        "type"       -> "Trade",
+        "type" -> "Trade",
         "instrument" -> trade.instrument,
-        "price"      -> trade.price,
-        "size"       -> trade.size
-      )
+        "price" -> trade.price,
+        "size" -> trade.size)
     case instruments: Instruments =>
-      instruments.asScala.foreach { instrument => 
+      instruments.asScala.foreach { instrument =>
         out ! Json.obj(
-          "type"                -> "Instrument",
-          "instrument"          -> instrument.asString(),
-          "priceFactor"         -> instrument.getPriceFactor(),
-          "sizeFactor"          -> instrument.getSizeFactor(),
+          "type" -> "Instrument",
+          "instrument" -> instrument.asString(),
+          "priceFactor" -> instrument.getPriceFactor(),
+          "sizeFactor" -> instrument.getSizeFactor(),
           "priceFractionDigits" -> instrument.getPriceFractionDigits(),
-          "sizeFractionDigits"  -> instrument.getSizeFractionDigits()
-        )
+          "sizeFractionDigits" -> instrument.getSizeFractionDigits())
       }
       publisher ! MarketDataRequest
       context.system.eventStream.subscribe(self, classOf[MarketData])
