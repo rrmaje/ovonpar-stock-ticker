@@ -6,7 +6,7 @@ spec:
   selector:
     matchLabels:
       app: parity-ticker
-  replicas: 3
+  replicas: 2
   template:
     metadata:
       labels:
@@ -20,7 +20,7 @@ spec:
             - name: OST_MAILER_URL
               value: "http://35.204.16.24:3010/market/trade"
             - name: OST_POSTGRES_URL
-              value: "jdbc:postgresql://10.164.0.3:5432/postgres"
+              value: "jdbc:postgresql://10.55.250.93:5432/postgres"
             - name: OST_MULTICAST_INTERFACE
               value: "eth0" 
             - name: OST_REQUEST_ADDRESS
